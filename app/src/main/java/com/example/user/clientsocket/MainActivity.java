@@ -1,91 +1,119 @@
 package com.example.user.clientsocket;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
-import android.support.v7.app.AppCompatActivity;
+import android.app.Activity;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.net.Socket;
+public class MainActivity extends Activity {
 
-/**
- * Created by Girish Bhalerao on 5/4/2017.
- */
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-
-    private TextView mTextViewReplyFromServer;
-    private EditText mEditTextSendMessage;
+    TextView textResponse;
+    EditText editTextAddress, editTextPort;
+    Button buttonConnect, buttonClear;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button buttonSend = (Button) findViewById(R.id.btn_send);
+        editTextAddress = (EditText)findViewById(R.id.address);
+        editTextPort = (EditText)findViewById(R.id.port);
+        buttonConnect = (Button)findViewById(R.id.connect);
+        buttonClear = (Button)findViewById(R.id.clear);
+        textResponse = (TextView)findViewById(R.id.response);
 
-        mEditTextSendMessage = (EditText) findViewById(R.id.edt_send_message);
-        mTextViewReplyFromServer = (TextView) findViewById(R.id.tv_reply_from_server);
+        buttonConnect.setOnClickListener(buttonConnectOnClickListener);
 
-        buttonSend.setOnClickListener(this);
-    }
+        buttonClear.setOnClickListener(new OnClickListener(){
 
-    @Override
-    public void onClick(View v) {
-
-        switch (v.getId()) {
-
-            case R.id.btn_send:
-                sendMessage(mEditTextSendMessage.getText().toString());
-                break;
-        }
-    }
-
-    private void sendMessage(final String msg) {
-
-        final Handler handler = new Handler();
-        Thread thread = new Thread(new Runnable() {
             @Override
-            public void run() {
+            public void onClick(View v) {
+                textResponse.setText("");
+            }});
+    }
 
-                try {
-                    //Replace below IP with the IP of that device in which server socket open.
-                    //If you change port then change the port number in the server side code also.
-                    Socket s = new Socket("192.168.1.33", 9002);
+    OnClickListener buttonConnectOnClickListener =
+            new OnClickListener(){
 
-                    OutputStream out = s.getOutputStream();
+                @Override
+                public void onClick(View arg0) {
+                    MyClientTask myClientTask = new MyClientTask(
+                            editTextAddress.getText().toString(),
+                            Integer.parseInt(editTextPort.getText().toString()));
+                    myClientTask.execute();
+                }};
 
-                    PrintWriter output = new PrintWriter(out);
+    public class MyClientTask extends AsyncTask<Void, Void, Void> {
 
-                    output.println(msg);
-                    output.flush();
-                    BufferedReader input = new BufferedReader(new InputStreamReader(s.getInputStream()));
-                    final String st = input.readLine();
+        String dstAddress;
+        int dstPort;
+        String response = "";
 
-                    handler.post(new Runnable() {
-                        @Override
-                        public void run() {
+        MyClientTask(String addr, int port){
+            dstAddress = addr;
+            dstPort = port;
+        }
 
-                            String s = mTextViewReplyFromServer.getText().toString();
-                            if (st.trim().length() != 0)
-                                mTextViewReplyFromServer.setText(s + "\nFrom Server : " + st);
-                        }
-                    });
+        @Override
+        protected Void doInBackground(Void... arg0) {
 
-                    output.close();
-                    out.close();
-                    s.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+            Socket socket = null;
+
+            try {
+                socket = new Socket(dstAddress, dstPort);
+
+                ByteArrayOutputStream byteArrayOutputStream =
+                        new ByteArrayOutputStream(1024);
+                byte[] buffer = new byte[1024];
+
+                int bytesRead;
+                InputStream inputStream = socket.getInputStream();
+
+    /*
+     * notice:
+     * inputStream.read() will block if no data return
+     */
+                while ((bytesRead = inputStream.read(buffer)) != -1){
+                    byteArrayOutputStream.write(buffer, 0, bytesRead);
+                    response += byteArrayOutputStream.toString("UTF-8");
+                }
+
+            } catch (UnknownHostException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+                response = "UnknownHostException: " + e.toString();
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+                response = "IOException: " + e.toString();
+            }finally{
+                if(socket != null){
+                    try {
+                        socket.close();
+                    } catch (IOException e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
                 }
             }
-        });
+            return null;
+        }
 
-        thread.start();
+        @Override
+        protected void onPostExecute(Void result) {
+            textResponse.setText(response);
+            super.onPostExecute(result);
+        }
+
     }
+
 }
+
